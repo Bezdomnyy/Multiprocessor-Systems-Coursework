@@ -1,0 +1,63 @@
+[WTI]:
+
+1. Procesor P0 je 3 puta pristupao memoriji. Procesor P1 je 4 puta pristupao memoriji. Procesor P2 je 2 puta pristupao memoriji. Procesor P3 je 1 put pristupao memoriji. Hit rate procesora P0, P2 i P3 je 0%. Hit rate procesora P1 je 25%.
+
+2. Prilikom upisa procesora P1 u blok A0 ažurira se operativna memorija zbog poštovanja write-through politike. Keš memorija se ne ažurira zbog primene no-write-allocate strategije.
+
+3. U koraku 4, procesor P0 prilikom čitanja mora da dovuče blok iz operativne memorije jer se on ne nalazi u tom trenutku u kešu.
+
+4. U koraku 5, procesor P1 ne vrši dohvatanje bloka prilikom upisa u blok A2.
+
+5. Da bi blok bio dovučen u memoriju, potrebno je promeniti strategiju u write-allocate. To znači da će blok biti dovučen u keš memoriju u situaciji write miss. Osobina WTI protokola koja loše utiče na performanse jeste write-through politika, odnosno činjenica da se podaci u operativnoj memoriji uvek održavaju ažurnim. Svaka operacija upisa vrši upis direktno u operativnu memoriju, što je znatno sporije u odnosu na upis u keš memoriju. Pored toga, saobraćaj na magistrali je znatno veći. Nedostatke je moguće ublažiti uvođenjem dodatnog stanja Modified (M) koje označava da je podatak promenjen, ali da je ažurna samo lokalna kopija u kešu procesora koji je obavio upis u dati podatak. Upis u operativnu memoriju se vrši tek prilikom zamene blokova ili kad neki drugi procesor zatraži upis ili čitanje izmenjenog podatka.
+
+[MSI]:
+
+6. Suštinska razlika MSI protokola u odnosu na WTI kod koraka 3 i 5 jeste činjenica da se da se upis vrši samo u keš memoriju, nakon čega se dati podatak označava kao modifikovan.
+
+7. Nakon koraka 3, blok A0 će u kešu procesora P1 biti u stanju Modified (M) zbog toga što je nakon operacije upisa to postala jedina ažurna kopija datog podatka.
+
+8. Nakon koraka 4, blok A0 će u kešu procesora P0 biti u stanju Shared (S) jer je P0 dohvatio podatak sa namerom za čitanje, pa sada procesori P0 i P1 "dele" ažurnu kopiju datog podatka.
+
+9. U koraku 2, nakon što je procesor P0 primetio zahtev za čitanjem bloka A0 na magistrali, izvršio je operaciju Flush i upisao svoju kopiju u operativnu memoriju. Odatle je procesor P2 mogao da pročita ažurnu vrednost podatka.
+Isto se dešava i u koraku 4. gde na zahtev procesora P0, procesor P1 radi flush kako bi P0 pročitao ažurnu verziju podatka.
+
+[MESI]
+
+10. U koraku 2, na zahtev procesora P2 za čitanjem podatka A0, odgovara procesor P0 koji dostavlja traženi podatak.
+Dostavljeni podatak će biti u stanju Shared (S) u keš memoriji procesora P2.
+
+11. U koraku 3, prilikom upisa procesora P1 u blok A0, doći će do transfera datog bloka direktno iz keša procesora P0. Pošto procesori P0 i P2 poseduju ažurnu kopiju podatka, manje je vremena potrebno da se ta kopija prosledi izmeću procesora, nego da se podatak dohvata iz operativne memorije.
+
+12. U koraku 5, podatak A2 je u stanju Modified (M), zbog toga što je procesor P1 zatražio upis u dati blok i stoga to predstavlja jedinu ažurnu kopiju datog podatka.
+
+13. U koraku 6, prilikom čitanja podatka A2 od strane procesora P1 se ne izvršavaju nikakve akcije protokola zbog toga što se dati ispravan podatak već nalazi u kešu procesora P1.
+
+[MOESI]
+
+14. Nakon koraka 3, blok A0 će biti u stanju Modified (M) u kešu procesora P1. Procesor P1 je poslednji menjao vrednost bloka A0 i vrednost tog podatka u keš memoriji procesora P1 predstavlja jedinu ažurnu kopiju. Procesor P0 kod koga je dati podatak pre toga bio u stanju Owned (O) prosleđuje dati blok procesoru P1, vrši upis podatka u operativnu memoriju i šalje procesoru P2 upgrade signal da invalidira svoju kopiju podatka. Ulazi za blok A0 u keševima procesora P0 i P2 nakon izvršenja operacije upisa procesora P1 postaju nevalidni (I).
+
+15. Nakon koraka 4, blok A0 će biti u stanju Owned (O) u kešu procesora P1, zbog toga što je procesor P0 je zatražio čitanje bloka A0, čija se jedina ažurna kopija nalazila u kešu procesora P1. Zbog toga P1 šalje podatak procesoru P0, kod koga se blok A0 sad nalazi u deljenom - Shared (S) stanju. U kešu procesora P2 ulaz u kome se nalazi blok A0 ostaje nevalidan (I) jer od trenutka kad je P1 izvršio upis podatka A0, P2 nije tražio nikakve operacije nad tim podatkom. 
+
+16. Nakon koraka 8, blok A2 će biti u stanju Owned (O) u kešu procesora P1, jer je P1 prosledio svoju ažurnu kopiju podatka procesoru P0 koji je zatračio čitanje datog bloka.
+
+17. U trenutku 10 memorija neće biti ažurna jer će se u kešu procesora P3 nalaziti modifikovan podatak A2. Procesor P3 je upravo u koraku 10 zatražio da izvrši upis u blok A2.
+
+[Dragon]
+
+18. Posle koraka 3, blok sa podatkom A0 prelazi u stanje Sm (Shared-modified) u procecsoru P1, dok u procesorima P0 i P2 prelazi u stanje Sc. U keševima procesora P1, P2 i P3 ovaj podatak ima svuda istu vrednost, 2.
+
+19. U koraku 3 se ne ažurira memorija. Suštinska razlika u odnosu na prethodne protokole jeste u tome što se kod njih radi flush, tj. podaci se smeštaju u memoriju čim neki novi procesor zatraži upis u dati podatak (pored toga što se regularno vraćaju u memoriju kad dođe do zamene blokova). Kod protokola Dragon, procesor nakon što dobije ažurnu kopiju podatka od drugog procesora i nakon što je modifikuje, šalje novu vrednost podatka svim procesorima koji imaju dati podatak u svojim keševima. Upis u operativnu memoriju se vrši samo u slučaju zamene blokova.
+
+20. Blok nije prešao u stanje Sm u koraku 5 iz razloga što ni jedan drugi procesor nije imao blok A2 u koji P1 želi da izvrši upis, već je taj blok dovučen direktno iz memorije. Prilikom zamene, procesor P1 je samo izvršio operaciju flush, tj. vratio stari blok u memoriju, sa ažurnom vrednošću, i dovukao novi blok iz memorije na njegovo mesto.
+
+21. Blok u kešu procesora P1 sa podatkom A2 će biti u stanju Modified (M) nakon operacije čitanja u koraku 6.
+
+[FireFly]
+
+22. Nakon koraka 3, podatak A0 u procesorima P0 i P1 se nalazi u stanju Sd (Shared not dirty). Ovo stanje označava da se dati podatak nalazi u keš memoriji više procesora, kao i to da se data kopija ne razlikuje u odnosu na ostale kopije tog podatka, odnosno da podatak nije ,,zaprljan''. Ekvivalent ovom stanju kod protokola Dragon je stanje Sc (Shared clean).
+
+23. U koraku 5 memorija se ne ažurira. Nakon što je procesor P1 izvršio upis u koraku 3, nova vrednost podatka je prosleđena svim ostalim procesorima kod kojih se taj podatk nalazio, ali je takođe nova vrednost podatka sačuvana i u memoriji. Zbog toga, u koraku 5, dovoljno je bilo samo dovući novi blok na mesto starog.
+
+24. Nakon što procesor P0 zatraži čitanje podatka A2 u koraku 8, procesor 1 mu dostavlja traženi podatak i pritom ažurira operativnu memoriju operacijom flush.
+
+25. U koraku 10, memorija je ažurna po pitanju podataka A0 i A2. Podatak A2 se u procesorima P0, P1 i P3 nalazi u stanju Sd (shared not dirty), dok se podatak A0 takođe nalazi u stanju Sd u procesoru P2.
